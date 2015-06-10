@@ -1,0 +1,82 @@
+---
+title       : Prediction of Demand for Medical Care by the Elderly
+subtitle    : 
+author      : CVava
+framework   : io2012        # {io2012, html5slides, shower, dzslides, ...}
+highlighter : highlight.js  # {highlight.js, prettify, highlight}
+hitheme     : tomorrow      # 
+widgets     : []            # {mathjax, quiz, bootstrap}
+mode        : selfcontained # {standalone, draft}
+knit        : slidify::knit2slides
+---
+
+## Introduction
+
+The purpose of this application is to estimate the number of healthcare related office visits by individuals aged 66 and older based on some health-related variables as well as socioeconomic variables.
+
+This application implements a predictive model presented by Achim Zeileis, 
+Christian Kleiber and Simon Jackman in "Regression Models for Count Data in R", Journal of Statistical Software, 2006. The model is based on data obtained from the US National Medical Expenditure Survey (NMES) for 1987/88 and describing 4406 individuals covered by Medicare. 
+
+--- .class #id 
+
+## Variables
+
+### Health-related Variables
+- Number of hospital stays (from 0 up to 10)
+- Self-perceived health status (excellent, average, poor)
+- Number of chronic conditions (from 0 up to 8)
+
+### Socioeconomic Variables
+- Gender (Female / Male)
+- Number of years of education (from 0 up to 18)
+- Private insurance indicator (whether the patient has private insurance).
+
+--- .class #id 
+
+## Data Visualization
+
+```{r echo = FALSE, message = FALSE}
+load("DebTrivedi.rda")
+dt <- DebTrivedi[, c(1, 6:8, 13, 15, 18)]
+fm_pois <- glm(ofp ~ ., data = dt, family = poisson)
+#confint(fm_pois)
+
+clog <- function(x) log(x + 0.5)
+cfac <- function(x, breaks = NULL) {
+  if(is.null(breaks)) breaks <- unique(quantile(x, 0:10/10))
+  x <- cut(x, breaks, include.lowest = TRUE, right = FALSE)
+  levels(x) <- paste(breaks[-length(breaks)], ifelse(diff(breaks) > 1,
+  c(paste("-", breaks[-c(1, length(breaks))] - 1, sep = ""), "+"), ""),
+  sep = "")
+  return(x)
+}
+
+par( mfrow = c( 2, 3 ) )
+plot(clog(ofp) ~ health, data = dt, varwidth = TRUE, ylab='Log(Office Visits)', xlab='Health Status')
+plot(clog(ofp) ~ cfac(numchron), data = dt, ylab='Log(Office Visits)', xlab='Chronic Conditions')
+plot(clog(ofp) ~ privins, data = dt, varwidth = TRUE, ylab='Log(Office Visits)', xlab='Private Insurance')
+plot(clog(ofp) ~ cfac(hosp, c(0:2, 8)), data = dt, ylab='Log(Office Visits)', xlab='Hospital Visits')
+plot(clog(ofp) ~ gender, data = dt, varwidth = TRUE, ylab='Log(Office Visits)', xlab='Gender')
+plot(cfac(ofp, c(0:2, 4, 6, 10, 100)) ~ school, data = dt, breaks = 9, ylab='Log(Office Visits)', xlab='Years of Education')
+
+Xh <- data.frame(hosp=10, health=as.factor("poor"), numchron=8, gender=as.factor("female"), school=18, privins=as.factor("yes"))
+Xl <- data.frame(hosp=0, health=as.factor("excellent"), numchron=0, gender=as.factor("male"), school=0, privins=as.factor("no"))
+PoH <- data.frame(predict(fm_pois, newdata = Xh, se.fit = TRUE))
+PoL <- data.frame(predict(fm_pois, newdata = Xl, se.fit = TRUE))
+cH <- c(PoH$fit - qnorm(0.95)*PoH$se.fit, PoH$fit + qnorm(0.95)*PoH$se.fit)
+cL <- c(PoL$fit - qnorm(0.95)*PoL$se.fit, PoL$fit + qnorm(0.95)*PoL$se.fit)
+```
+
+--- .class #id 
+
+## Results
+
+The values for the Estimated Number of Office Visits ranges from `r format(PoH$fit, digits=2)` down to `r format(PoL$fit, digits=2)` for the most demanding and the least demanding patients respectivelly.
+
+The selected algorithm is based on Poisson regression and gives results in the interval:
+
+* [`r format(cH, digits=2)`] for the most demanding patients
+* [`r format(cL, digits=2)`] for the least demanding patients
+
+All of these values were predicted with 95% confidence.
+
